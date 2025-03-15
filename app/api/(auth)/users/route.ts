@@ -75,3 +75,57 @@ export const POST = async (req: { json: () => any; }) => {
         );
     }
 };
+
+
+export const PUT = async (req) => {
+    try {
+        await connect(); // Connect to MongoDB
+
+        // Get JSON data from request body
+        const body = await req.json();
+        console.log("Received body for update:", body);
+
+        // Ensure at least one identifier (email or username) is provided
+        
+        if (!body.email && !body.username) {
+            return new NextResponse(
+                JSON.stringify({ message: "Email or Username is required to update user!" }),
+                { status: 400, headers: { "Content-Type": "application/json" } }
+            );
+        }
+
+        // Find user by email or username
+        const existingUser = await User.findOne({ 
+            $or: [{ email: body.email }, { username: body.username }] 
+        });
+
+        if (!existingUser) {
+            return new NextResponse(
+                JSON.stringify({ message: "User not found!" }),
+                { status: 404, headers: { "Content-Type": "application/json" } }
+            );
+        }
+
+        // Update only the provided fields
+        const updatedUser = await User.findOneAndUpdate(
+            { _id: existingUser._id }, // Find by ID
+            { $set: body }, // Update with provided fields
+            { new: true } // Return updated user
+        );
+
+        console.log("Updated user:", updatedUser);
+
+        return new NextResponse(
+            JSON.stringify({ message: "User updated successfully!", user: updatedUser }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+
+    } catch (error) {
+        console.error("PUT Error:", error);
+
+        return new NextResponse(
+            JSON.stringify({ message: "Internal Server Error" }),
+            { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+    }
+};
