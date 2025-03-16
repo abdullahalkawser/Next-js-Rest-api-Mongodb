@@ -1,6 +1,9 @@
 import connect from "@/lib/db";
 import User from "@/lib/modals/user";
 import { NextResponse } from "next/server";
+import mongoose from 'mongoose';
+import { request } from "http";
+
 
 // GET Request - Fetch all users
 export const GET = async () => {
@@ -77,55 +80,58 @@ export const POST = async (req: { json: () => any; }) => {
 };
 
 
+
+
 export const PUT = async (req) => {
     try {
-        await connect(); // Connect to MongoDB
+        await connect();
+        const { objectId, email, ...updateData } = await req.json();
 
-        // Get JSON data from request body
-        const body = await req.json();
-        console.log("Received body for update:", body);
+        if (!objectId && !email)
+            return NextResponse.json({ message: "Email or id is required!" }, { status: 400 });
 
-        // Ensure at least one identifier (email or username) is provided
-        
-        if (!body.email && !body.username) {
-            return new NextResponse(
-                JSON.stringify({ message: "Email or Username is required to update user!" }),
-                { status: 400, headers: { "Content-Type": "application/json" } }
-            );
-        }
+        if (objectId && !mongoose.Types.ObjectId.isValid(objectId))
+            return NextResponse.json({ message: "Invalid ObjectId!" }, { status: 400 });
 
-        // Find user by email or username
         const existingUser = await User.findOne({ 
-            $or: [{ email: body.email }, { username: body.username }] 
+            $or: [{ email }, { _id: objectId ? new mongoose.Types.ObjectId(objectId) : null }] 
         });
 
-        if (!existingUser) {
-            return new NextResponse(
-                JSON.stringify({ message: "User not found!" }),
-                { status: 404, headers: { "Content-Type": "application/json" } }
-            );
-        }
+        if (!existingUser)
+            return NextResponse.json({ message: "User not found!" }, { status: 404 });
 
-        // Update only the provided fields
-        const updatedUser = await User.findOneAndUpdate(
-            { _id: existingUser._id }, // Find by ID
-            { $set: body }, // Update with provided fields
-            { new: true } // Return updated user
-        );
+        const updatedUser = await User.findByIdAndUpdate(existingUser._id, updateData, { new: true });
 
-        console.log("Updated user:", updatedUser);
-
-        return new NextResponse(
-            JSON.stringify({ message: "User updated successfully!", user: updatedUser }),
-            { status: 200, headers: { "Content-Type": "application/json" } }
-        );
+        return NextResponse.json({ message: "User updated!", user: updatedUser }, { status: 200 });
 
     } catch (error) {
         console.error("PUT Error:", error);
+        return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
+    }
+}
 
-        return new NextResponse(
-            JSON.stringify({ message: "Internal Server Error" }),
-            { status: 500, headers: { "Content-Type": "application/json" } }
-        );
+export const DELETE = async (req) => {
+    try {
+        await connect();
+
+        const { searchParams } = new URL(req.url);  // Use req instead of request
+        const userId = searchParams.get('userId');
+
+        if (!userId) {
+            return NextResponse.json({ message: "User ID is required!" }, { status: 400 });
+        }
+
+        // Example: Assuming you have a method to find and delete the user.
+        const deletedUser = await User.findByIdAndDelete(userId); // Replace with your actual delete method
+
+        if (!deletedUser) {
+            return NextResponse.json({ message: "User not found!" }, { status: 404 });
+        }
+
+        return NextResponse.json({ message: "User deleted successfully!" }, { status: 200 });
+    } catch (error) {
+        console.error("DELETE Error:", error);
+        return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
     }
 };
+
